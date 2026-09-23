@@ -1,0 +1,10 @@
+rules_version = '2';
+service cloud.firestore {
+  match /databases/{database}/documents {
+    // Somente contas autenticadas no Firebase Authentication.
+    // Crie apenas usuarios autorizados em Authentication > Users.
+    match /{document=**} {
+      allow read, write: if request.auth != null;
+    }
+  }
+}
