@@ -1,31 +1,22 @@
 # Nauber - Controle de Entrega de EPI
 
-Versao preparada para Git + Firebase sem Firebase Storage.
+Versão sem tela de login no acesso normal.
 
-## Servicos usados
-- Firebase Authentication (E-mail/Senha): acesso ao sistema.
-- Cloud Firestore: colaboradores, equipamentos, estoque, historico, fotos e assinaturas.
-- Firebase Hosting: opcional.
+## Como funciona
+- O aplicativo abre normalmente, sem pedir e-mail e senha.
+- O Firebase Authentication usa login Anônimo em segundo plano apenas para permitir acesso ao Firestore conforme as regras atuais.
+- O Painel Administrativo continua protegido por e-mail e senha do Firebase Authentication.
+- Fotos e assinaturas continuam armazenadas no Firestore como Base64; não usa Firebase Storage.
+
+## Passo obrigatório no Firebase
+No Firebase Console:
+1. Authentication > Método de login.
+2. Ative o provedor **Anônimo**.
+3. Mantenha também **E-mail/senha** ativado para o Painel Admin.
+
+## Firestore Rules
+As regras podem continuar exigindo `request.auth != null`, pois o acesso normal será autenticado anonimamente em segundo plano.
+
 
 ## Importante
-As fotos sao comprimidas no navegador e salvas no Firestore como Data URL/Base64. O app limita imagens grandes para evitar ultrapassar o limite por documento do Firestore.
-
-O sistema exige login antes de carregar dados. Somente crie usuarios autorizados em Firebase Authentication > Users.
-
-## Publicar regras
-No terminal, com Firebase CLI configurado:
-
-```bash
-firebase deploy --only firestore:rules
-```
-
-Ou copie o conteudo de `firestore.rules` para Firestore > Regras no Firebase Console e clique em Publicar.
-
-## Hospedagem opcional
-
-```bash
-npm install -g firebase-tools
-firebase login
-firebase init hosting
-firebase deploy
-```
+Ative o provedor Anonymous em Firebase Authentication. Nao e necessario criar login visivel para os usuarios do app.

@@ -454,16 +454,6 @@ body { background: white; }
 </style>
 </head>
 <body>
-<div id="appAuthGate" class="app-auth-gate">
-  <div class="app-auth-card">
-    <h2>Acesso ao sistema</h2>
-    <p>Entre com a conta cadastrada no Firebase Authentication.</p>
-    <div class="form-group"><label>E-mail</label><input type="email" id="appLoginEmail" autocomplete="username"></div>
-    <div class="form-group"><label>Senha</label><input type="password" id="appLoginPassword" autocomplete="current-password"></div>
-    <button class="btn" style="width:100%;justify-content:center" onclick="appLogin()">Entrar</button>
-    <div id="appLoginError" class="app-auth-error"></div>
-  </div>
-</div>
 <div id="loadingOverlay">
 <div class="spinner"></div>
 <h3 style="color: var(--primary-green); margin-bottom: 8px;">Carregando sistema...</h3>
@@ -842,10 +832,7 @@ const defaultMaterials = [
 ];
 
 let currentEmployee = null, selectedMaterials = [], currentStep = 1;
-let adminAuthenticated = false, editModalType = '', editModalId = null, editModalPhotoData = '';
-if (firebaseConfigured) {
-    firebaseAuth.onAuthStateChanged(user => { adminAuthenticated = !!user; });
-}
+let editModalType = '', editModalId = null, editModalPhotoData = '';
 let chartInstances = {};
 
 function compressImage(file, maxW = 300, maxH = 300, q = 0.75) {
@@ -869,40 +856,40 @@ document.addEventListener('DOMContentLoaded', function() {
     document.querySelector('.logo').src = NAUBER_LOGO_SVG;
     initSignaturePad();
     updateStepIndicator();
+
     if (!firebaseConfigured) {
-        document.getElementById('appLoginError').textContent = 'Firebase ainda não configurado. Verifique firebase-config.js.';
-        document.getElementById('appLoginError').style.display = 'block';
+        alert('Firebase ainda não configurado. Verifique firebase-config.js.');
+        const o = document.getElementById('loadingOverlay'); if (o) o.style.display = 'none';
         return;
     }
+
+    let dataLoaded = false;
     firebaseAuth.onAuthStateChanged(async user => {
-        adminAuthenticated = !!user;
         if (!user) {
-            document.getElementById('appAuthGate').style.display = 'flex';
-            const o = document.getElementById('loadingOverlay'); if (o) o.style.display = 'none';
+            try {
+                await firebaseAuth.signInAnonymously();
+            } catch (e) {
+                console.error('Falha no acesso anônimo:', e);
+                alert('Não foi possível abrir o sistema. Ative o provedor Anônimo em Firebase Authentication > Método de login. Código: ' + (e.code || e.message));
+                const o = document.getElementById('loadingOverlay'); if (o) o.style.display = 'none';
+            }
             return;
         }
-        document.getElementById('appAuthGate').style.display = 'none';
-        try {
-            await initData();
-            loadHistoryMain();
-        } catch (e) {
-            console.error(e);
-            alert('Erro ao carregar dados do Firestore: ' + e.message);
+
+        if (!dataLoaded) {
+            try {
+                await initData();
+                loadHistoryMain();
+                dataLoaded = true;
+            } catch (e) {
+                console.error(e);
+                alert('Erro ao carregar dados do Firestore: ' + e.message);
+            }
         }
         const o = document.getElementById('loadingOverlay');
         if (o) { o.style.opacity = '0'; setTimeout(() => o.style.display = 'none', 500); }
     });
 });
-
-async function appLogin() {
-    const email = document.getElementById('appLoginEmail').value.trim();
-    const password = document.getElementById('appLoginPassword').value;
-    const errorEl = document.getElementById('appLoginError');
-    errorEl.style.display = 'none';
-    if (!email || !password) { errorEl.textContent = 'Informe e-mail e senha.'; errorEl.style.display = 'block'; return; }
-    try { await firebaseAuth.signInWithEmailAndPassword(email, password); }
-    catch (e) { console.error(e); errorEl.textContent = 'E-mail ou senha inválidos.'; errorEl.style.display = 'block'; }
-}
 
 
 function openCompletedDeliveries() {
@@ -1011,48 +998,20 @@ function printEmployeeFile(employeeId) {
     setTimeout(() => { w.print(); }, 500);
 }
 
-function openAdminModal() { document.getElementById('adminModal').classList.add('active'); adminAuthenticated ? renderAdminPanel() : renderAdminLogin(); }
-function closeAdminModal() { document.getElementById('adminModal').classList.remove('active'); Object.values(chartInstances).forEach(c => c.destroy()); chartInstances = {}; }
-function renderAdminLogin() {
-    const configWarning = !firebaseConfigured ? '<div class="alert alert-warning" style="text-align:left">Firebase ainda não configurado. Preencha <strong>firebase-config.js</strong> e ative Authentication por E-mail/Senha no Firebase Console.</div>' : '';
-    document.getElementById('adminBody').innerHTML = `<div class="admin-login"><div class="lock-icon">🔒</div><h3>Acesso Restrito</h3><p>Entre com sua conta administrativa do Firebase</p>${configWarning}<div class="form-group"><label>E-mail:</label><input type="email" id="adminEmail" placeholder="admin@empresa.com" autocomplete="username"></div><div class="form-group"><label>Senha:</label><input type="password" id="adminPassword" placeholder="Sua senha" autocomplete="current-password" onkeypress="if(event.key==='Enter')tryAdminLogin()"></div><div id="loginError" class="alert alert-error" style="display:none"></div><button class="btn" onclick="tryAdminLogin()" style="margin-top:16px;width:100%;justify-content:center;" ${!firebaseConfigured ? 'disabled' : ''}>🔓 Entrar</button></div>`;
-    setTimeout(() => document.getElementById('adminEmail')?.focus(), 100);
+function openAdminModal() {
+    document.getElementById('adminModal').classList.add('active');
+    renderAdminPanel();
 }
-async function tryAdminLogin() {
-    const errorEl = document.getElementById('loginError');
-    if (!firebaseAuth) {
-        errorEl.textContent = 'Firebase Authentication não está configurado.';
-        errorEl.style.display = 'block';
-        return;
-    }
-    const email = document.getElementById('adminEmail').value.trim();
-    const pwd = document.getElementById('adminPassword').value;
-    if (!email || !pwd) {
-        errorEl.textContent = 'Informe e-mail e senha.';
-        errorEl.style.display = 'block';
-        return;
-    }
-    try {
-        await firebaseAuth.signInWithEmailAndPassword(email, pwd);
-        adminAuthenticated = true;
-        renderAdminPanel();
-    } catch (err) {
-        console.error('Falha no login administrativo:', err);
-        errorEl.textContent = 'Não foi possível entrar. Verifique e-mail, senha e a configuração do Firebase Authentication.';
-        errorEl.style.display = 'block';
-        document.getElementById('adminPassword').value = '';
-    }
+function closeAdminModal() {
+    document.getElementById('adminModal').classList.remove('active');
+    Object.values(chartInstances).forEach(c => c.destroy());
+    chartInstances = {};
 }
-async function adminLogout() {
-    if (firebaseAuth) await firebaseAuth.signOut();
-    adminAuthenticated = false;
-    renderAdminLogin();
-}
+
 function renderAdminPanel() {
     const st = getStorageUsage();
     const barClass = st.percent > 90 ? 'danger' : st.percent > 70 ? 'warning' : '';
     document.getElementById('adminBody').innerHTML = `
-        <div style="display:flex;justify-content:flex-end;margin-bottom:12px"><button class="btn btn-secondary btn-small" onclick="adminLogout()">Sair do sistema</button></div>
         <div class="storage-indicator"><span style="font-size:1.2em">💾</span><div style="flex:1"><div style="display:flex;justify-content:space-between;margin-bottom:4px"><span style="font-size:0.85em;font-weight:600">Dados carregados (estimativa local)</span><span class="storage-text">${st.usedMB} MB / ${st.limitMB} MB (${st.percent}%)</span></div><div class="storage-bar"><div class="storage-bar-fill ${barClass}" style="width:${st.percent}%"></div></div></div></div>
         <div class="admin-tabs">
             <button class="admin-tab active" onclick="switchAdminTab('dashboard',this)">📊 Dashboard & Estatísticas</button>
